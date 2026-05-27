@@ -21,6 +21,8 @@ def add_10_blocks(
     size: Int,
 ):
     var i = block_dim.x * block_idx.x + thread_idx.x
+    if i < size:
+        output[i] = a[i] + Scalar[dtype](10)
     # FILL ME IN (roughly 2 lines)
 
 
