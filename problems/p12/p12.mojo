@@ -32,8 +32,23 @@ def dot_product(
     size: Int,
 ):
     # FILL ME IN (roughly 13 lines)
-    ...
+    var shared = stack_allocation[
+        dtype=dtype, address_space=AddressSpace.SHARED
+    ](row_major[TPB]())
 
+    # local i and global i are the same
+    local_i = thread_idx.x
+
+    if local_i < size:
+        shared[local_i] = a[local_i] * b[local_i]
+
+    barrier()
+
+    if local_i == 0:
+        var total = Scalar[dtype](0)
+        for j in range(TPB):
+            total += shared[j]
+        output[0] = total
 
 # ANCHOR_END: dot_product
 
