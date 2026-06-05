@@ -33,9 +33,36 @@ def conv_1d_simple(
     b: TileTensor[mut=False, dtype, ConvLayout, ImmutAnyOrigin],
 ):
     var global_i = block_dim.x * block_idx.x + thread_idx.x
-    var local_i = thread_idx.x
     # FILL ME IN (roughly 14 lines)
 
+    var shared_in = stack_allocation[
+        dtype=dtype, address_space=AddressSpace.SHARED
+    ](row_major[SIZE]())
+
+    var shared_kernel = stack_allocation[
+        dtype=dtype, address_space=AddressSpace.SHARED
+    ](row_major[CONV]())
+
+    # Data loading: Each thread loads one element from input and kernel
+    # Memory pattern: Shared arrays for input and convolution kernel
+    # Thread sync: Coordination before computation
+
+    # bring the input/kernel into shared memory
+    if global_i < CONV:
+        shared_kernel[global_i] = b[global_i]
+
+    if global_i < SIZE:
+        shared_in[global_i] = a[global_i]
+
+    # synch up to ensure all data is loaded
+    barrier()
+
+    if global_i < SIZE:
+        var total  = Scalar[dtype](0)
+        for j in range(CONV):
+            if global_i + j < SIZE:
+                total += shared_in[global_i + j] * shared_kernel[j]
+        output[global_i] = total
 
 # ANCHOR_END: conv_1d_simple
 
@@ -61,6 +88,35 @@ def conv_1d_block_boundary(
     var local_i = thread_idx.x
     # FILL ME IN (roughly 18 lines)
 
+    var shared_in = stack_allocation[
+        dtype=dtype, address_space=AddressSpace.SHARED
+    ](row_major[TPB + CONV_2 - 1]())
+
+    var shared_kernel = stack_allocation[
+        dtype=dtype, address_space=AddressSpace.SHARED
+    ](row_major[CONV_2]())
+
+    # Data loading: Each thread loads one element from input and kernel
+    # Memory pattern: Shared arrays for input and convolution kernel
+    # Thread sync: Coordination before computation
+    # bring the input/kernel into shared memory
+    if global_i < SIZE_2:
+        if local_i < CONV_2:
+            shared_kernel[local_i] = b[local_i]
+
+        shared_in[local_i] = a[global_i]
+        if local_i < CONV_2 - 1:
+            shared_in[TPB + local_i] = a[TPB + local_i]
+
+    # sync up to ensure all data is loaded
+    barrier()
+
+    if global_i < SIZE_2:
+        var total  = Scalar[dtype](0)
+        for j in range(CONV_2):
+            if global_i + j < SIZE_2:
+                total += shared_in[local_i + j] * shared_kernel[j]
+        output[global_i] = total
 
 # ANCHOR_END: conv_1d_block_boundary
 
